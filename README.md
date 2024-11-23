@@ -55,7 +55,7 @@ string-simple = "0.1.0"
    - [x] Implementation
    - [x] Test cases
    - [x] Documentation
-   - [x] Benchmark
+   - [ ] Benchmark
  - [ ] 'find all' string function.
    - [x] Implementation
    - [x] Test cases
