@@ -10,8 +10,7 @@ string-simple = "0.1.0"
 ```
 
 ### 2. Use Crate
-```doctestinjectablerust
-
+```rust
  use string_simple::builder::StringBuilder;
  const LOOP_COUNT: u8 = 10;
 
