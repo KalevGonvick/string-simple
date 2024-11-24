@@ -61,6 +61,10 @@ string-simple = "0.1.0"
    - [x] Test cases
    - [x] Documentation
    - [ ] Benchmark
+ - [ ] 'character count' string function
+   - [x] Implementation
+   - [x] Test cases
+   - [ ] Benchmark
  - [ ] 'to upper case' string function
    - [ ] Implementation
    - [ ] Test cases

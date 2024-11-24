@@ -153,15 +153,12 @@ pub mod modify {
         let mut replaced_len = 0usize;
         let mut current_base_pos = 0usize;
         while current_base_pos < base_str_bytes.len() {
-
             let mut current_sub_pos = 0usize;
             let mut current_base_test = current_base_pos;
             'inner: while current_sub_pos < sub_str_bytes.len()
                 && current_base_test < base_str_bytes.len() {
-
                 if &base_str_bytes[current_base_test] == &sub_str_bytes[current_sub_pos] {
-
-                    if current_sub_pos == sub_str_bytes.len() -1 {
+                    if current_sub_pos == sub_str_bytes.len() - 1 {
                         let mut temp_len = replaced_len;
                         temp_len.add_assign(repl_len);
                         let mut temp_str = String::with_capacity(temp_len);
@@ -182,7 +179,7 @@ pub mod modify {
                 let mut temp_string = String::with_capacity(temp_len);
                 temp_string.push_str(replaced_string.as_ref());
                 temp_string.push_str(unsafe {
-                    std::str::from_utf8_unchecked(&base_str_bytes[current_base_pos..current_base_pos +1])
+                    std::str::from_utf8_unchecked(&base_str_bytes[current_base_pos..current_base_pos + 1])
                 });
                 replaced_len = temp_len;
                 replaced_string = temp_string;
@@ -198,6 +195,32 @@ pub mod modify {
 
 
 pub mod compare {
+    use std::collections::HashMap;
+
+    pub fn get_char_count<B>(
+        base: &B,
+        chars: &Vec<char>
+    ) -> HashMap<char, u32>
+        where B: ToString
+    {
+        let binding = base.to_string();
+        let bytes = binding.as_bytes();
+        let mut char_count: HashMap<char, u32> = HashMap::new();
+        for c_char in chars {
+            char_count.insert(*c_char, 0);
+        }
+        let mut pos = 0usize;
+        while pos < bytes.len() {
+            if char_count.contains_key(&(bytes[pos] as char)) {
+                char_count.insert(
+                    bytes[pos] as char,
+                    char_count.get(&(bytes[pos] as char)).unwrap() + 1
+                );
+            }
+            pos += 1;
+        }
+        char_count
+    }
 
     /// # Description
     ///
@@ -237,15 +260,12 @@ pub mod compare {
 
         let mut current_base_pos = 0usize;
         while current_base_pos < base_string_bytes.len() {
-
             let mut current_find_pos = 0usize;
             let mut current_base_test = current_base_pos;
             'inner: while current_find_pos < find_string_bytes.len()
                 && current_base_test < base_string_bytes.len() {
-
                 if &base_string_bytes[current_base_test] == &find_string_bytes[current_find_pos] {
-
-                    if current_find_pos == find_string_bytes.len() -1 {
+                    if current_find_pos == find_string_bytes.len() - 1 {
                         matches.push((current_base_pos, current_base_test + 1));
                         break 'inner;
                     }
@@ -296,15 +316,12 @@ pub mod compare {
 
         let mut current_base_pos = 0usize;
         while current_base_pos < base_string_bytes.len() {
-
             let mut current_find_pos = 0usize;
             let mut base_pos_test = current_base_pos;
             'inner: while current_find_pos < find_string_bytes.len()
-                && base_pos_test < base_string_bytes.len(){
-
+                && base_pos_test < base_string_bytes.len() {
                 if &base_string_bytes[base_pos_test] == &find_string_bytes[current_find_pos] {
-
-                    if current_find_pos == find_string_bytes.len() -1 {
+                    if current_find_pos == find_string_bytes.len() - 1 {
                         return Some((current_base_pos, base_pos_test + 1));
                     }
 
@@ -323,9 +340,21 @@ pub mod compare {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::fmt::Display;
     use super::*;
 
+    #[test]
+    fn test_char_count() {
+        let str1 = String::from("abcdefgaaa b c ddd c");
+        let chars = vec!['a', 'b', 'c'];
+        let result = compare::get_char_count(&str1, &chars);
+        let mut expected: HashMap<char, u32> = HashMap::new();
+        expected.insert('c', 3);
+        expected.insert('a', 4);
+        expected.insert('b', 2);
+        assert_eq!(result, expected);
+    }
     #[test]
     fn test_append1() {
         let mut str1 = String::from("123");
@@ -364,7 +393,7 @@ mod tests {
         let str1 = String::from("123test113test444testtest");
         let str2 = String::from("test");
         let result = compare::find_all_exact(&str1, &str2);
-        let expected: Vec<(usize, usize)> = vec![(3,7), (10, 14), (17, 21), (21, 25)];
+        let expected: Vec<(usize, usize)> = vec![(3, 7), (10, 14), (17, 21), (21, 25)];
         assert_eq!(expected, result);
     }
 
