@@ -41,35 +41,33 @@ string-simple = "0.1.0"
    - [x] Test cases
    - [x] Documentation
    - [x] Benchmark
- - [ ] 'replace all' string function.
+ - [x] 'replace all' string function.
    - [x] Implementation
    - [x] Test cases
    - [x] Documentation
-   - [ ] Benchmark
+   - [x] Benchmark
  - [x] 'find first' string function.
    - [x] Implementation 
    - [x] Test Cases
    - [x] Documentation
    - [x] Benchmark
- - [ ] 'append' string function.
+ - [x] 'append' string function.
    - [x] Implementation
    - [x] Test cases
    - [x] Documentation
-   - [ ] Benchmark
- - [ ] 'find all' string function.
+   - [x] Benchmark
+ - [x] 'find all' string function.
    - [x] Implementation
    - [x] Test cases
    - [x] Documentation
-   - [ ] Benchmark
- - [ ] 'character count' string function
+   - [x] Benchmark
+ - [x] 'character count' string function
    - [x] Implementation
    - [x] Test cases
-   - [ ] Benchmark
- - [ ] 'to upper case' string function
-   - [ ] Implementation
-   - [ ] Test cases
-   - [ ] Benchmark
- - [ ] 'to lower case' string function
-   - [ ] Implementation
-   - [ ] Test cases
-   - [ ] Benchmark
+   - [x] Documentation
+   - [x] Benchmark
+ - [x] 'all possible substring from chars' string function
+   - [x] Implementation
+   - [x] Test cases
+   - [x] Documentation
+   - [x] Benchmark

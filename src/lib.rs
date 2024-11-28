@@ -93,7 +93,7 @@ pub mod modify {
     /// * `append` - The new string that will be added onto the base.
     ///
     /// # Examples
-    ///
+    ///)
     /// ```
     /// use string_simple::modify::append;
     /// let mut str1 = String::from("base string");
@@ -146,49 +146,58 @@ pub mod modify {
         let t = find.to_string();
         let sub_str_bytes = t.as_bytes();
         let t = replace.to_string();
-        let repl_len = AsRef::<str>::as_ref(&t).len();
+
         assert!(base_str_bytes.len() >= sub_str_bytes.len());
 
+        let repl_len = AsRef::<str>::as_ref(&t).len();
         let mut replaced_string = String::with_capacity(0);
         let mut replaced_len = 0usize;
         let mut current_base_pos = 0usize;
+
         while current_base_pos < base_str_bytes.len() {
             let mut current_sub_pos = 0usize;
             let mut current_base_test = current_base_pos;
+
             'inner: while current_sub_pos < sub_str_bytes.len()
                 && current_base_test < base_str_bytes.len() {
-                if &base_str_bytes[current_base_test] == &sub_str_bytes[current_sub_pos] {
-                    if current_sub_pos == sub_str_bytes.len() - 1 {
-                        let mut temp_len = replaced_len;
-                        temp_len.add_assign(repl_len);
-                        let mut temp_str = String::with_capacity(temp_len);
-                        temp_str.push_str(replaced_string.as_ref());
-                        temp_str.push_str(t.as_ref());
-                        replaced_len = temp_len;
-                        replaced_string = temp_str;
+
+                match (&base_str_bytes[current_base_test] == &sub_str_bytes[current_sub_pos],
+                       current_sub_pos == sub_str_bytes.len() - 1,
+                        sub_str_bytes.len() < base_str_bytes.len() - current_base_pos )
+                {
+
+                    (true, true, true) => {
+                        let mut l = replaced_len;
+                        l.add_assign(repl_len);
+                        let mut s = String::with_capacity(l);
+                        s.push_str(replaced_string.as_ref());
+                        s.push_str(t.as_ref());
+                        replaced_len = l;
+                        replaced_string = s;
                         current_base_pos = current_base_test;
                         break 'inner;
                     }
 
-                    current_sub_pos = current_sub_pos + 1;
-                    current_base_test = current_base_test + 1;
-                    continue 'inner;
+                    (true, false, true) => {
+                        current_sub_pos += 1;
+                        current_base_test += 1;
+                    }
+
+                    (_,_,_) => {
+                        let mut l = replaced_len;
+                        l.add_assign(1);
+                        let mut s = String::with_capacity(l);
+                        s.push_str(replaced_string.as_ref());
+                        let c = base_str_bytes[current_base_pos] as char;
+                        s.push(c);
+                        replaced_len = l;
+                        replaced_string = s;
+                        break 'inner;
+                    }
                 }
-                let mut temp_len = replaced_len;
-                temp_len.add_assign(1);
-                let mut temp_string = String::with_capacity(temp_len);
-                temp_string.push_str(replaced_string.as_ref());
-                temp_string.push_str(unsafe {
-                    std::str::from_utf8_unchecked(&base_str_bytes[current_base_pos..current_base_pos + 1])
-                });
-                replaced_len = temp_len;
-                replaced_string = temp_string;
-                break 'inner;
             }
-
-            current_base_pos = current_base_pos + 1;
+            current_base_pos += 1;
         }
-
         *base = replaced_string
     }
 }
@@ -197,6 +206,97 @@ pub mod modify {
 pub mod compare {
     use std::collections::HashMap;
 
+    /// # Description
+    ///
+    /// Finds all substrings containing a set of specified characters.
+    /// Returns a HashMap containing all substrings as keys and the value being the number of times the substring occurs in the base string.
+    ///
+    /// # Arguments
+    ///
+    /// * `base` - The base string being searched.
+    /// * `char_group` - the specified chars being looked for in substrings.
+    ///
+    /// # Outputs
+    ///
+    /// * HashMap<String, usize> - HashMap of all strings as keys and the number of times the substring occurs as the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use string_simple::compare::substring_char_group_count;
+    ///
+    /// let str1 = String::from("abcc");
+    /// let chars = vec!['a', 'b', 'c'];
+    ///
+    /// // The result will look like this: {'abc': 1, 'abcc': 1}
+    /// let result = substring_char_group_count(&str1, &chars);
+    /// ```
+    pub fn substring_char_group_count<B>(
+        base: &B,
+        char_group: &Vec<char>
+    ) -> HashMap<String, usize>
+        where B: ToString
+    {
+        let binding = base.to_string();
+        let base_bytes = binding.as_bytes();
+        let mut base_pos = 0usize;
+        let mut sub_string_count: HashMap<String, usize> = HashMap::new();
+        let mut sub_byte_count: HashMap<&[u8], usize> = HashMap::new();
+
+        while base_pos < base_bytes.len() {
+            let mut end_pos = base_bytes.len();
+            let current = base_pos;
+
+            while current < end_pos {
+                let mut found_count_down = char_group.len();
+
+                for char in char_group {
+                    let byte = *char as u8;
+                    if base_bytes[current..end_pos].contains(&byte) {
+                        found_count_down -= 1
+                    }
+                }
+
+                match (found_count_down == 0, sub_byte_count.get(&base_bytes[current..end_pos])) {
+                    (true, Some(count)) => sub_byte_count.insert(&base_bytes[current..end_pos], count + 1usize),
+                    (true, None) => sub_byte_count.insert(&base_bytes[current..end_pos], 1usize),
+                    _ => None
+                };
+                end_pos -= 1;
+            }
+            base_pos += 1;
+        }
+
+        for (byte_arr, count) in sub_byte_count {
+            sub_string_count.insert(unsafe { std::str::from_utf8_unchecked(byte_arr).to_string() }, count);
+        }
+        sub_string_count
+    }
+
+    /// # Description
+    ///
+    /// Gets the count of all characters fom a provided base string given a group of characters.
+    ///
+    /// # Arguments
+    ///
+    /// * `base` - The base string being searched.
+    /// * `chars` - A vector of characters being searched and tallied.
+    ///
+    /// # Output
+    ///
+    /// * HashMap<char, u32> - A hashmap containing the different characters and the number of times they appear in the base string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use string_simple::compare::get_char_count;
+    ///
+    /// let str1 = String::from("abc");
+    /// let chars = vec!['a', 'b', 'c'];
+    ///
+    /// // The result will look like this: {'a': 1, 'b': 1, 'c': 1}
+    /// let result = get_char_count(&str1, &chars);
+    /// ```
     pub fn get_char_count<B>(
         base: &B,
         chars: &Vec<char>
@@ -264,19 +364,21 @@ pub mod compare {
             let mut current_base_test = current_base_pos;
             'inner: while current_find_pos < find_string_bytes.len()
                 && current_base_test < base_string_bytes.len() {
-                if &base_string_bytes[current_base_test] == &find_string_bytes[current_find_pos] {
-                    if current_find_pos == find_string_bytes.len() - 1 {
+                match (&base_string_bytes[current_base_test] == &find_string_bytes[current_find_pos],
+                       current_find_pos == find_string_bytes.len() - 1) {
+                    (true, true) => {
                         matches.push((current_base_pos, current_base_test + 1));
                         break 'inner;
                     }
-
-                    current_find_pos = current_find_pos + 1;
-                    current_base_test = current_base_test + 1;
-                    continue 'inner;
+                    (true, false) => {
+                        current_find_pos += 1;
+                        current_base_test += 1;
+                        continue 'inner;
+                    }
+                    (_, _) => break 'inner
                 }
-                break 'inner;
             }
-            current_base_pos = current_base_pos + 1;
+            current_base_pos += 1;
         }
         matches
     }
@@ -345,6 +447,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_substring_char_group_count() {
+        let str1 = String::from("aabbccba");
+        let char_group = vec!['c', 'a', 'b'];
+        let result = compare::substring_char_group_count(&str1, &char_group);
+        let mut expected: HashMap<String, usize> = HashMap::new();
+        expected.insert("cba".to_string(), 1);
+        expected.insert("abbc".to_string(), 1);
+        expected.insert("abbccba".to_string(), 1);
+        expected.insert("bbccba".to_string(), 1);
+        expected.insert("ccba".to_string(), 1);
+        expected.insert("aabbccb".to_string(), 1);
+        expected.insert("aabbc".to_string(), 1);
+        expected.insert("abbccb".to_string(), 1);
+        expected.insert("abbcc".to_string(), 1);
+        expected.insert("bccba".to_string(), 1);
+        expected.insert("aabbcc".to_string(), 1);
+        expected.insert("aabbccba".to_string(), 1);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
     fn test_char_count() {
         let str1 = String::from("abcdefgaaa b c ddd c");
         let chars = vec!['a', 'b', 'c'];
@@ -355,6 +478,7 @@ mod tests {
         expected.insert('b', 2);
         assert_eq!(result, expected);
     }
+
     #[test]
     fn test_append1() {
         let mut str1 = String::from("123");
@@ -373,11 +497,11 @@ mod tests {
 
     #[test]
     fn test_replace() {
-        let mut str1 = String::from("123123123test123123123test12");
+        let mut str1 = String::from("123123123test123123123test12teest");
         let str2 = String::from("test");
         let str3 = String::from("replaced");
         modify::replace(&mut str1, &str2, &str3);
-        assert_eq!("123123123replaced123123123replaced12", str1);
+        assert_eq!("123123123replaced123123123replaced12teest", str1);
     }
 
     #[test]
