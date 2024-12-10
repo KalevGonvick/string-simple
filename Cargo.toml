@@ -33,3 +33,4 @@ name = "string_simple_benchmarks"
 harness = false
 
 [dependencies]
+#packed_simd = "0.3.9"

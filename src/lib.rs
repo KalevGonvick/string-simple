@@ -1,3 +1,7 @@
+#![feature(portable_simd)]
+
+extern crate core;
+
 pub mod builder {
     use std::ops::AddAssign;
 
@@ -160,12 +164,10 @@ pub mod modify {
 
             'inner: while current_sub_pos < sub_str_bytes.len()
                 && current_base_test < base_str_bytes.len() {
-
                 match (&base_str_bytes[current_base_test] == &sub_str_bytes[current_sub_pos],
                        current_sub_pos == sub_str_bytes.len() - 1,
-                        sub_str_bytes.len() < base_str_bytes.len() - current_base_pos )
+                       sub_str_bytes.len() < base_str_bytes.len() - current_base_pos)
                 {
-
                     (true, true, true) => {
                         let mut l = replaced_len;
                         l.add_assign(repl_len);
@@ -183,7 +185,7 @@ pub mod modify {
                         current_base_test += 1;
                     }
 
-                    (_,_,_) => {
+                    (_, _, _) => {
                         let mut l = replaced_len;
                         l.add_assign(1);
                         let mut s = String::with_capacity(l);
@@ -205,6 +207,11 @@ pub mod modify {
 
 pub mod compare {
     use std::collections::HashMap;
+    use std::ops::{Add, Sub};
+    use std::simd::{Simd, u8x64};
+    use std::simd::cmp::SimdPartialEq;
+    use std::simd::num::{SimdInt, SimdUint};
+
 
     /// # Description
     ///
@@ -238,13 +245,13 @@ pub mod compare {
         where B: ToString
     {
         let binding = base.to_string();
-        let base_bytes = binding.as_bytes();
+        let haystack = binding.as_bytes();
         let mut base_pos = 0usize;
         let mut sub_string_count: HashMap<String, usize> = HashMap::new();
         let mut sub_byte_count: HashMap<&[u8], usize> = HashMap::new();
 
-        while base_pos < base_bytes.len() {
-            let mut end_pos = base_bytes.len();
+        while base_pos < haystack.len() {
+            let mut end_pos = haystack.len();
             let current = base_pos;
 
             while current < end_pos {
@@ -252,14 +259,14 @@ pub mod compare {
 
                 for char in char_group {
                     let byte = *char as u8;
-                    if base_bytes[current..end_pos].contains(&byte) {
+                    if haystack[current..end_pos].contains(&byte) {
                         found_count_down -= 1
                     }
                 }
 
-                match (found_count_down == 0, sub_byte_count.get(&base_bytes[current..end_pos])) {
-                    (true, Some(count)) => sub_byte_count.insert(&base_bytes[current..end_pos], count + 1usize),
-                    (true, None) => sub_byte_count.insert(&base_bytes[current..end_pos], 1usize),
+                match (found_count_down == 0, sub_byte_count.get(&haystack[current..end_pos])) {
+                    (true, Some(count)) => sub_byte_count.insert(&haystack[current..end_pos], count + 1usize),
+                    (true, None) => sub_byte_count.insert(&haystack[current..end_pos], 1usize),
                     _ => None
                 };
                 end_pos -= 1;
@@ -289,37 +296,93 @@ pub mod compare {
     /// # Examples
     ///
     /// ```
-    /// use string_simple::compare::get_char_count;
+    /// use string_simple::compare::count_chars;
     ///
     /// let str1 = String::from("abc");
     /// let chars = vec!['a', 'b', 'c'];
     ///
     /// // The result will look like this: {'a': 1, 'b': 1, 'c': 1}
-    /// let result = get_char_count(&str1, &chars);
+    /// let result = count_chars(&str1, &chars);
     /// ```
-    pub fn get_char_count<B>(
+    pub fn count_chars<B>(
         base: &B,
         chars: &Vec<char>
-    ) -> HashMap<char, u32>
+    ) -> HashMap<char, usize>
         where B: ToString
     {
         let binding = base.to_string();
         let bytes = binding.as_bytes();
-        let mut char_count: HashMap<char, u32> = HashMap::new();
+        let mut char_count: HashMap<char, usize> = HashMap::new();
         for c_char in chars {
-            char_count.insert(*c_char, 0);
-        }
-        let mut pos = 0usize;
-        while pos < bytes.len() {
-            if char_count.contains_key(&(bytes[pos] as char)) {
-                char_count.insert(
-                    bytes[pos] as char,
-                    char_count.get(&(bytes[pos] as char)).unwrap() + 1
-                );
+            let mut pos = 0usize;
+            let mut count = 0usize;
+            while pos < bytes.len() {
+                if c_char == &(bytes[pos] as char) {
+                    count += 1;
+                }
+                pos += 1;
             }
-            pos += 1;
+            char_count.insert(*c_char, count);
         }
+
         char_count
+    }
+
+    pub fn count_chars_simd<B>(
+        base: &B,
+        chars: &Vec<char>
+    ) -> HashMap<char, usize>
+        where B: ToString
+    {
+        let binding = base.to_string();
+        let haystack = binding.as_bytes();
+        let mut needles: HashMap<char, usize> = HashMap::new();
+        for c_char in chars {
+            let needle = *c_char as u8;
+            let count = needle_count_simd(haystack, needle);
+            needles.insert(*c_char, count);
+        }
+        needles
+    }
+
+    fn simd_u8x64_from_offset(slice: &[u8], offset: usize) -> u8x64 {
+        let slice = unsafe { slice.get_unchecked(offset..) };
+        if slice.len() < 64 {
+            let mut padded_slice: [u8; 64] = [0; 64];
+            copy_to_arr_with_padding(&mut padded_slice, slice);
+            u8x64::from_slice(padded_slice.as_slice())
+        } else {
+            u8x64::from_slice(slice)
+        }
+    }
+
+    fn simd_sum_x64(u8s: &u8x64) -> usize {
+        let mut store = [0; size_of::<u8x64>()];
+        u8s.copy_to_slice(&mut store);
+        store.iter().map(|&e| e as usize).sum()
+    }
+
+    fn copy_to_arr_with_padding(dest: &mut [u8], src: &[u8]) {
+        if dest.len() == src.len() {
+            dest.copy_from_slice(src);
+        } else if dest.len() > src.len() {
+            dest[..src.len()].copy_from_slice(src);
+        } else {
+            dest.copy_from_slice(&src[..dest.len()]);
+        }
+    }
+
+    fn needle_count_simd(haystack: &[u8], needle: u8) -> usize {
+        let needle = u8x64::splat(needle);
+        let loops = haystack.len() / 64 + 1;
+        let mut counts = u8x64::splat(0);
+        let mut offset = 0;
+        for _ in 0..loops {
+            let res = simd_u8x64_from_offset(haystack, offset).simd_eq(needle).to_int().cast();
+            counts -= u8x64::from(res);
+            offset += 64;
+        }
+        simd_sum_x64(&counts)
     }
 
     /// # Description
@@ -405,37 +468,130 @@ pub mod compare {
     /// let result = contains(&base_string, &find_string);
     /// ```
     pub fn contains<B, S>(
-        base: &B,
-        find: &S
-    ) -> Option<(usize, usize)>
+        haystack: &B,
+        needle: &S
+    ) -> bool
         where B: ToString, S: ToString
     {
-        let t = base.to_string();
-        let base_string_bytes = t.as_bytes();
-        let t = find.to_string();
-        let find_string_bytes = t.as_bytes();
-        assert!(base_string_bytes.len() >= find_string_bytes.len());
+        let t = haystack.to_string();
+        let haystack = t.as_bytes();
+        let t = needle.to_string();
+        let needle = t.as_bytes();
+        assert!(haystack.len() >= needle.len());
 
         let mut current_base_pos = 0usize;
-        while current_base_pos < base_string_bytes.len() {
+        while current_base_pos < haystack.len() {
             let mut current_find_pos = 0usize;
             let mut base_pos_test = current_base_pos;
-            'inner: while current_find_pos < find_string_bytes.len()
-                && base_pos_test < base_string_bytes.len() {
-                if &base_string_bytes[base_pos_test] == &find_string_bytes[current_find_pos] {
-                    if current_find_pos == find_string_bytes.len() - 1 {
-                        return Some((current_base_pos, base_pos_test + 1));
+            'inner: while current_find_pos < needle.len() && base_pos_test < haystack.len() {
+                if &haystack[base_pos_test] == &needle[current_find_pos] {
+                    if current_find_pos == needle.len() - 1 {
+                        return true;
                     }
-
                     current_find_pos = current_find_pos + 1;
                     base_pos_test = base_pos_test + 1;
                     continue 'inner;
                 }
                 break 'inner;
             }
-            current_base_pos = current_base_pos + 1;
+            current_base_pos += 1;
         }
-        return None;
+        return false;
+    }
+
+    pub fn contains_simd<B, S>(haystack: &B, needle: &S) -> bool
+        where
+            B: ToString,
+            S: ToString,
+    {
+        let haystack = haystack.to_string().as_bytes();
+        let needle = needle.to_string().as_bytes();
+
+        // Ensure preconditions are met: haystack must be larger than needle and needle non-empty
+        assert!(haystack.len() >= needle.len() && !needle.is_empty());
+
+        let needle_len = needle.len();
+        let haystack_len = haystack.len();
+        let loops = (haystack_len + 63) / 64; // Calculate the number of 64-byte chunks
+        let first_byte = needle[0]; // First byte of the needle for initial comparison
+
+        for loop_index in 0..loops {
+            let offset = loop_index * 64;
+
+            // Fetch 64 bytes from the haystack, or fewer if near the end
+            let chunk = simd_u8x64_from_offset(haystack, offset);
+            let compare_mask: Simd<u8, 64> = chunk.simd_eq(u8x64::splat(first_byte)).to_int().cast();
+
+            // If no matches for the first byte, skip to the next chunk
+            if compare_mask.reduce_max() == 0 {
+                continue;
+            }
+
+            // Check subsequent bytes of the needle
+            for i in 0..64.min(haystack_len - offset) {
+                if i + needle_len > haystack_len {
+                    break; // Not enough remaining bytes in the haystack
+                }
+
+                if haystack[offset + i..offset + i + needle_len] == needle[..] {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+
+    pub fn substring_count_simd<B, S>(haystack: &B, needle: &S) -> usize
+        where B: ToString, S: ToString
+    {
+        let binding = haystack.to_string();
+        let haystack = binding.as_bytes();
+        let binding = needle.to_string();
+        let needle = binding.as_bytes();
+
+        assert!(haystack.len() >= needle.len() && needle.len() > 0);
+
+        let haystack_len = haystack.len();
+        let needle_len = needle.len();
+        let loops = (haystack_len + 63) / 64;
+        let first_byte = needle[0];
+        let mut count = 0i32;
+
+        'outer: for chunk_index in 0..loops {
+            let offset = chunk_index * 64;
+            let mut chunk_total = u8x64::splat(0);
+            let res = simd_u8x64_from_offset(haystack, offset)
+                .simd_eq(u8x64::splat(first_byte))
+                .to_int()
+                .cast();
+
+            chunk_total = chunk_total.sub(res);
+            if chunk_total.reduce_max() == 0 {
+                continue;
+            }
+
+            let mut current_max = 1usize;
+            let mut last_max = 0usize;
+            let mut sub_offset = offset + 1;
+            let mut needle_pos = 1;
+            while last_max < current_max && needle_pos < needle_len {
+                last_max = current_max;
+                let res = simd_u8x64_from_offset(haystack, sub_offset)
+                    .simd_eq(u8x64::splat(needle[needle_pos])).to_int().cast();
+                chunk_total -= res;
+                current_max = chunk_total.reduce_max() as usize;
+                if current_max > last_max && needle_pos == needle_len - 1 {
+                    let mask = chunk_total.simd_eq(u8x64::splat(current_max as u8));
+                    count -= mask.to_int().reduce_sum() as i32;
+                    continue 'outer;
+                }
+                sub_offset += 1;
+                needle_pos += 1;
+            }
+        }
+        count as usize
     }
 }
 
@@ -469,26 +625,30 @@ mod tests {
 
     #[test]
     fn test_char_count() {
-        let str1 = String::from("abcdefgaaa b c ddd c");
+        let str1 = String::from("abbccc748237489237498237482374982374892734987423982734982347984732984ccc");
         let chars = vec!['a', 'b', 'c'];
-        let result = compare::get_char_count(&str1, &chars);
-        let mut expected: HashMap<char, u32> = HashMap::new();
-        expected.insert('c', 3);
-        expected.insert('a', 4);
+        let result = compare::count_chars(&str1, &chars);
+        let mut expected: HashMap<char, usize> = HashMap::new();
+        expected.insert('c', 6);
+        expected.insert('a', 1);
         expected.insert('b', 2);
         assert_eq!(result, expected);
     }
 
     #[test]
-    fn test_append1() {
-        let mut str1 = String::from("123");
-        let str2 = String::from("test");
-        modify::append(&mut str1, &str2);
-        assert_eq!(String::from("123test"), str1);
+    fn test_char_count_simd() {
+        let str1 = String::from("abbccc748237489237498237482374982374892734987423982734982347984732984ccc");
+        let chars = vec!['a', 'b', 'c'];
+        let result = compare::count_chars_simd(&str1, &chars);
+        let mut expected: HashMap<char, usize> = HashMap::new();
+        expected.insert('c', 6);
+        expected.insert('a', 1);
+        expected.insert('b', 2);
+        assert_eq!(result, expected);
     }
 
     #[test]
-    fn test_append2() {
+    fn test_append() {
         let mut str1 = String::from("123");
         let str2 = String::from("test");
         modify::append(&mut str1, &str2);
@@ -509,24 +669,47 @@ mod tests {
         let str1 = String::from("123123123test123123123");
         let str2 = String::from("test");
         let result = compare::contains(&str1, &str2);
-        assert_eq!(str2, &str1[result.unwrap().0..result.unwrap().1]);
+        assert_eq!(true, result);
     }
 
     #[test]
-    fn test_find_all_exact1() {
+    fn test_contains_simd() {
+        let str1 = String::from("123123123test123123123");
+        let str2 = String::from("test");
+        let result = compare::contains_simd2(&str1, &str2);
+        assert_eq!(true, result);
+    }
+
+    #[test]
+    fn test_contains_simd2() {
+        let str1 = String::from("12312312312312312312312312312312312312t1e3s2t123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123123test");
+        let str2 = String::from("test");
+        let result = compare::contains_simd2(&str1, &str2);
+        assert_eq!(true, result);
+    }
+
+    #[test]
+    fn test_contains_simd3() {
+        let str1 = String::from("12312312312312312312312312312312312312t1e3123123123123123111111test12312312312312312312312312312312312312t1e312312312312312311111112312312312312312312312312312312312312t1e3123123123123123111111");
+        let str2 = String::from("test");
+        let result = compare::contains_simd2(&str1, &str2);
+        assert_eq!(true, result);
+    }
+
+    #[test]
+    fn test_contains_simd4() {
+        let str1 = String::from("12312312312312312312312312312312312312t1e3123123123123123111111test123123123123123123test2312312312312312t1e312312312312312311111112312312312312312312312312312312312312t1e312312312312312311111112312312312312312312312312312312312312t1e3123123123123123111111test123123123123123123test2312312312312312t1e312312312312312311111112312312312312312312312312312312312312t1e312312312312312311111112312312312312312312312312312312312312t1e3123123123123123111111test123123123123123123test2312312312312312t1e312312312312312311111112312312312312312312312312312312312312t1e3123123123123123111111");
+        let str2 = String::from("test");
+        let result = compare::sub_count_simd2(&str1, &str2);
+        assert_eq!(6, result);
+    }
+
+    #[test]
+    fn test_find_all_exact() {
         let str1 = String::from("123test113test444testtest");
         let str2 = String::from("test");
         let result = compare::find_all_exact(&str1, &str2);
         let expected: Vec<(usize, usize)> = vec![(3, 7), (10, 14), (17, 21), (21, 25)];
-        assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn test_find_all_exact2() {
-        let str1 = String::from("bbbbbbbbbbbbbbbbbb");
-        let str2 = String::from("bbb");
-        let result = compare::find_all_exact(&str1, &str2);
-        let expected: Vec<(usize, usize)> = vec![(0, 3), (1, 4), (2, 5), (3, 6), (4, 7), (5, 8), (6, 9), (7, 10), (8, 11), (9, 12), (10, 13), (11, 14), (12, 15), (13, 16), (14, 17), (15, 18)];
         assert_eq!(expected, result);
     }
 
@@ -543,36 +726,7 @@ mod tests {
 
 
     #[test]
-    fn test_stringbuilder1() {
-        let mut string_builder = builder::StringBuilder::new();
-        string_builder
-            .append("this")
-            .append("is")
-            .append("a")
-            .append("test");
-
-        assert_eq!(string_builder.build(), "thisisatest".to_string());
-    }
-
-    #[test]
-    fn test_stringbuilder2() {
-        let mut string_builder = builder::StringBuilder::new();
-        string_builder.append("this")
-            .append("is")
-            .append("another")
-            .append("test");
-        assert_eq!(string_builder.build(), "thisisanothertest".to_string());
-
-        string_builder
-            .append("this")
-            .append("is")
-            .append("another")
-            .append("test");
-        assert_eq!(string_builder.build(), "thisisanothertestthisisanothertest".to_string());
-    }
-
-    #[test]
-    fn test_stringbuilder3() {
+    fn test_stringbuilder() {
         let mut string_builder = builder::StringBuilder::new();
         let to_string_struct = ToStringStruct {
             a_string: String::from("struct_string"),

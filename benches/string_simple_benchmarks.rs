@@ -8,14 +8,50 @@ fn compare_benchmark(c: &mut Criterion) {
         black_box(&String::from("this is my test string for benchmarks!")),
         black_box(&String::from("test"))
     )));
+    c.bench_function("contains SIMD", |b| b.iter(|| {
+        let needles = String::from("test");
+        let chunk = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let mut haystack = String::with_capacity(16384);
+        for _ in 0..254 {
+            haystack.push_str(chunk);
+        }
+        haystack.push_str("test");
+        compare::contains_simd(black_box(&haystack), black_box(&needles))
+    }));
+    c.bench_function("sub_count_simd SIMD", |b| b.iter(|| {
+        let needles = String::from("test");
+        let chunk = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let mut haystack = String::with_capacity(16384);
+        haystack.push_str("test");
+        for _ in 0..254 {
+            haystack.push_str(chunk);
+        }
+        haystack.push_str("test");
+        compare::substring_count_simd(black_box(&haystack), black_box(&needles))
+    }));
     c.bench_function("all substrings from char group", |b| b.iter(|| compare::substring_char_group_count(
         black_box(&String::from("aabbcc")),
         black_box(&vec!['a', 'b', 'c'])
     )));
-    c.bench_function("char count", |b| b.iter(|| compare::get_char_count(
-        black_box(&String::from("aaabbbbccc")),
-        black_box(&vec!['a', 'b', 'c'])
-    )));
+    c.bench_function("char count", |b| b.iter(|| {
+        let needles = vec!['a', 'b', 'c'];
+        let chunk = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let mut haystack = String::with_capacity(16384);
+        for _ in 0..255 {
+            haystack.push_str(chunk);
+        }
+        compare::count_chars(black_box(&haystack), black_box(&needles))
+    }
+    ));
+    c.bench_function("char count SIMD", |b| b.iter(|| {
+        let needles = vec!['a', 'b', 'c'];
+        let chunk = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let mut haystack = String::with_capacity(16384);
+        for _ in 0..255 {
+            haystack.push_str(chunk);
+        }
+        compare::count_chars_simd(black_box(&haystack), black_box(&needles))
+    }));
     c.bench_function("find all", |b| b.iter(|| compare::find_all_exact(
         black_box(&String::from("aaabbbbccc")),
         black_box(&String::from("abbb"))

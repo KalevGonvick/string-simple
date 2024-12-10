@@ -35,22 +35,25 @@ string-simple = "0.1.0"
 ```
 
 # Task Checklist
-
+ - [ ] Add more data to benchmark functions for more accurate results.
  - [x] 'string builder' struct.
    - [x] Implementation
    - [x] Test cases
    - [x] Documentation
    - [x] Benchmark
+   - [ ] SIMD?
  - [x] 'replace all' string function.
    - [x] Implementation
    - [x] Test cases
    - [x] Documentation
    - [x] Benchmark
+   - [ ] SIMD?
  - [x] 'find first' string function.
    - [x] Implementation 
    - [x] Test Cases
    - [x] Documentation
    - [x] Benchmark
+   - [x] SIMD
  - [x] 'append' string function.
    - [x] Implementation
    - [x] Test cases
@@ -61,13 +64,16 @@ string-simple = "0.1.0"
    - [x] Test cases
    - [x] Documentation
    - [x] Benchmark
+   - [x] SIMD
  - [x] 'character count' string function
    - [x] Implementation
    - [x] Test cases
    - [x] Documentation
    - [x] Benchmark
+   - [x] SIMD
  - [x] 'all possible substring from chars' string function
    - [x] Implementation
    - [x] Test cases
    - [x] Documentation
    - [x] Benchmark
+   - [ ] SIMD?
